@@ -1,0 +1,4 @@
+EXPORTS 
+        ScreenSaverProc  = ScreenSaverProcW
+        ScreenSaverConfigureDialog
+		
