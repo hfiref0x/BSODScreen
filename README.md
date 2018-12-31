@@ -1,6 +1,6 @@
 
 # BSODScreen
-## ReactOS Screensaver.
+## ReactOS Screensaver
 
 # System Requirements
 
@@ -37,5 +37,5 @@ This project uses Khronos OpenGL / OpenGL ES XML API Registry. See KHRGL\wglext.
 
 # Authors
 
-Screensaver (c) 2018 BSODScreen Project
-3D Scene (c) 2018 by Uldis Rinkevichs
++ Screensaver (c) 2018 BSODScreen Project
++ 3D Scene (c) 2018 by Uldis Rinkevichs
