@@ -26,10 +26,12 @@ In order to build from source you need Microsoft Visual Studio 2015 and later ve
 * Select Platform ToolSet first for project in solution you want to build (Project->Properties->General): 
   * v120 for Visual Studio 2013;
   * v140 for Visual Studio 2015; 
-  * v141 for Visual Studio 2017.
+  * v141 for Visual Studio 2017;
+  * v142 for Visual Studio 2019.
 * For v140 and above set Target Platform Version (Project->Properties->General):
-  * If v140 then select 8.1 (Note that Windows 8.1 SDK must be installed);
-  * If v141 then select 10.0.17763.0 (Note that Windows 10.0.17763 SDK must be installed). 
+  * If v140 then select 8.1;
+  * If v141 and above then select 10.
+* Minimum required Windows SDK version is 8.1
 
 # 3rd party components usage
 
@@ -37,5 +39,5 @@ This project uses Khronos OpenGL / OpenGL ES XML API Registry. See KHRGL\wglext.
 
 # Authors
 
-+ Screensaver (c) 2018 BSODScreen Project
++ Screensaver (c) 2018 - 2019 BSODScreen Project
 + 3D Scene (c) 2018 by Uldis Rinkevichs

