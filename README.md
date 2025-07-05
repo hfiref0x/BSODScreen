@@ -1,43 +1,50 @@
-
 # BSODScreen
+
+[![Visitors](https://api.visitorbadge.io/api/visitors?path=https%3A%2F%2Fgithub.com%2Fhfiref0x%2FBSODScreen&countColor=%23263759&style=flat)](https://visitorbadge.io/status?path=https%3A%2F%2Fgithub.com%2Fhfiref0x%2FBSODScreen)
+
 ## ReactOS Screensaver
 
-# System Requirements
+---
 
-+ x86-32/x64 Windows 7/8/8.1/10;
-+ OpenGL hardware rendering support (optional);
-+ ReactOS x86-32 0.4.10 and later versions.
+## System Requirements
 
-# Warning (apply only for ReactOS)
+- Windows 7/8/8.1/10/11 (x86-32/x64)
+- OpenGL hardware rendering support (optional)
+- ReactOS x86-32 0.4.15 or newer
 
-This program may crash ReactOS, affect it stability, which may result in data lost or program crash itself. You use it at your own risk.
+---
 
-This Screensaver utilize critical system bug which was taken randomly from one of few hundreds(!) available in ReactOS. It maybe fixed or not working in future versions of ReactOS.
+## Warning (ReactOS Only)
 
-By default this BSOD is turned off. You can turn it on using screensaver configuration dialog -> select screensaver, right click on it -> select "Configure".
+This program may crash ReactOS or impact its stability, potentially resulting in data loss or application failure. Use at your own risk.
 
-# Build
+The screensaver exploits a critical system bug, randomly chosen from hundreds present in ReactOS. This bug may be fixed or behave differently in future ReactOS versions.
 
-BSODScreen comes with full source code written in C/C++.
-In order to build from source you need Microsoft Visual Studio 2015 and later versions.
+By default, the BSOD feature is disabled. To enable it: open the screensaver configuration dialog, select the screensaver, right-click it, and choose "Configure".
 
-## Instructions
+---
 
-* Select Platform ToolSet first for project in solution you want to build (Project->Properties->General): 
-  * v120 for Visual Studio 2013;
-  * v140 for Visual Studio 2015; 
-  * v141 for Visual Studio 2017;
-  * v142 for Visual Studio 2019.
-* For v140 and above set Target Platform Version (Project->Properties->General):
-  * If v140 then select 8.1;
-  * If v141 and above then select 10.
-* Minimum required Windows SDK version is 8.1
+## Building from Source
 
-# 3rd party components usage
+BSODScreen is written in C/C++ and includes complete source code.  
+To build from source, you need Microsoft Visual Studio 2019 or newer.
 
-This project uses Khronos OpenGL / OpenGL ES XML API Registry. See KHRGL\wglext.h, KHRGL\glext.h for more info.
+### Build Instructions
 
-# Authors
+- Set the Platform Toolset for the project you wish to build (Project → Properties → General):
+  - Use `v141` for Visual Studio 2019/2022
+- Minimum required Windows SDK version: 8.1
 
-+ Screensaver (c) 2018 - 2019 BSODScreen Project
-+ 3D Scene (c) 2018 by Uldis Rinkevichs
+---
+
+## Third-party Components
+
+This project uses the Khronos OpenGL / OpenGL ES XML API Registry.  
+See `KHRGL/wglext.h` and `KHRGL/glext.h` for details.
+
+---
+
+## Authors
+
+- Screensaver © 2018–2025 BSODScreen Project
+- 3D Scene © 2018 Uldis Rinkevichs

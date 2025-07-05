@@ -1,12 +1,12 @@
 /*******************************************************************************
 *
-*  (C) COPYRIGHT AUTHORS, 2018
+*  (C) COPYRIGHT AUTHORS, 2018 - 2025
 *
 *  TITLE:       GLOBAL.H
 *
-*  VERSION:     1.00
+*  VERSION:     1.03
 *
-*  DATE:        29 Dec 2018
+*  DATE:        04 Jul 2025
 *
 *  Global definitions.
 *
@@ -21,8 +21,12 @@
 #error ANSI build is not supported
 #endif
 
-#if defined (_MSC_VER)
-#if (_MSC_VER >= 1900) //VS15, 17 etc
+#if defined (_MSC_VER) //for vs2015
+#if (_MSC_VER <= 1900)
+#pragma warning(disable: 4214)
+#pragma warning(disable: 4204)
+#endif
+#if (_MSC_VER >= 1900)
 #ifdef _DEBUG
 #pragma comment(lib, "vcruntimed.lib")
 #pragma comment(lib, "ucrtd.lib")

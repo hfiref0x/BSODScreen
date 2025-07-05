@@ -27,6 +27,21 @@
     <ClCompile Include="minirtl\_strcmpi.c">
       <Filter>minirtl</Filter>
     </ClCompile>
+    <ClCompile Include="minirtl\_strcpy.c">
+      <Filter>minirtl</Filter>
+    </ClCompile>
+    <ClCompile Include="minirtl\_strend.c">
+      <Filter>minirtl</Filter>
+    </ClCompile>
+    <ClCompile Include="minirtl\_strlen.c">
+      <Filter>minirtl</Filter>
+    </ClCompile>
+    <ClCompile Include="minirtl\ultostr.c">
+      <Filter>minirtl</Filter>
+    </ClCompile>
+    <ClCompile Include="minirtl\_strcat.c">
+      <Filter>minirtl</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="global.h">
@@ -87,6 +102,21 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="sooriginal.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="textures\bsod2.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="textures\bsod4.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="textures\bsod5.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="textures\bsod6.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="bitmap1.bmp">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

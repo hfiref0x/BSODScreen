@@ -1,12 +1,12 @@
 /*******************************************************************************
 *
-*  (C) COPYRIGHT AUTHORS, 2018 - 2019
+*  (C) COPYRIGHT AUTHORS, 2018 - 2025
 *
 *  TITLE:       MAIN.C
 *
-*  VERSION:     1.02
+*  VERSION:     1.03
 *
-*  DATE:        01 Dec 2019
+*  DATE:        04 Jul 2025
 *
 *  Screensaver entry point.
 *
@@ -17,17 +17,15 @@
 *
 *******************************************************************************/
 
-#pragma once
-
 #define OEMRESOURCE
 
 #include "global.h"
 
 using namespace Gdiplus;
 
-#define ROS_SCR_MAX_SCENE_TEXT      16
+#define ROS_SCR_MAX_SCENE_TEXT      17
 
-static const char   *SceneText[ROS_SCR_MAX_SCENE_TEXT] = {
+static const char* SceneText[ROS_SCR_MAX_SCENE_TEXT] = {
     "MODERN",
     "DYNAMIC",
     "BEAUTIFUL",
@@ -40,21 +38,34 @@ static const char   *SceneText[ROS_SCR_MAX_SCENE_TEXT] = {
     "IDA Pro",
     "wnt4sp6a.zip (235 MB, 912 MB unpacked)",
     "w2ksp1.zip (203 MB, 627 MB unpacked)",
+    "Microsoft FastFat github repository",
     "Creative Copy-Paste",
     "Crowdsourcing",
     "Sh*tpostings",
     "BSOD"
 };
 
-int         quit = 0;
-ULONG       screen_width, screen_height, text_index = 0;
-ULONG_PTR   gdiplusToken;
-double      g_FOV = 60.0, screen_ar = 1.0;
+volatile int quit = 0;
+ULONG screen_width, screen_height, text_index = 0;
+ULONG_PTR gdiplusToken;
+double g_FOV = 60.0, screen_ar = 1.0;
 
-BOOL        g_IsReactOS = FALSE;
-BOOL        g_bCrash = FALSE;
+BOOL g_IsReactOS = FALSE;
+BOOL g_bCrash = FALSE;
 
-typedef double(__cdecl *PSINCOSFN)(double x);
+DWORD g_LastFPSUpdateTime = 0;
+DWORD g_FrameCount = 0;
+int g_CurrentFPS = 0;
+char g_FPSText[32];
+char g_SystemName[32];
+char g_SystemVersion[64];
+UINT g_CurrentBsodTexture = 0;
+
+#define     BSOD_TEXTURE_COUNT 6
+#define     BSOD_TEXTURE_BASE  8
+#define     CUBE_TEXTURE_COUNT 7
+
+typedef double(__cdecl* PSINCOSFN)(double x);
 
 #define IDB_bragin_obshak_jpg           TEXT("BRAGIN_OBSHAK.JPG")
 #define IDB_ReactOS_logo_png            TEXT("REACTOS_LOGO.PNG")
@@ -63,15 +74,21 @@ typedef double(__cdecl *PSINCOSFN)(double x);
 #define IDB_BSOD_PNG                    TEXT("BSOD.PNG")
 #define IDB_ROS_Butthurt_png            TEXT("ROS_BUTTHURT.PNG")
 #define IDB_pepe_frog_png               TEXT("PEPE-FROG.PNG")
+#define IDB_bsod2_png                   TEXT("BSOD2.PNG")
 #define IDB_bsod3_png                   TEXT("BSOD3.PNG")
+#define IDB_bsod4_png                   TEXT("BSOD4.PNG")
+#define IDB_bsod5_png                   TEXT("BSOD5.PNG")
+#define IDB_bsod6_png                   TEXT("BSOD6.PNG")
 #define IDB_font_png                    TEXT("FONT.PNG")
 
 #define ROS_SCR_SIZEOF_VERTEX_ARRAY     24
-#define ROS_SCR_MAX_TEXTURES            16
+#define ROS_SCR_MAX_TEXTURES            20
 #define ROS_SCR_MAIN_TIMER              1001
 #define ROS_SCR_TEXT_TIMER              1002
+#define ROS_SCR_BSOD_TIMER              1003
 
-static GLint    texutre_ids[ROS_SCR_MAX_TEXTURES];
+static GLint    texture_ids[ROS_SCR_MAX_TEXTURES];
+static GLint    cube_textures[6];
 
 static const double qvertex[ROS_SCR_SIZEOF_VERTEX_ARRAY][8] = {
     {-0.5, -0.5, -0.5,1.0,  0.0, 0.0, 0.0, 0.0}, // vertex+texcoord
@@ -105,12 +122,198 @@ static const double qvertex[ROS_SCR_SIZEOF_VERTEX_ARRAY][8] = {
     {-0.5, -0.5,  0.5, 1.0, 0.0, 1.0, 0.0, 0.0}
 };
 
-/*
+UINT g_LastBsodTexture = 0;
+float g_BsodTransitionAlpha = 1.0f;
+BOOL g_IsTransitioning = FALSE;
+BOOL g_bFastAnimation = FALSE;
 
-Initialize OpenGL context with x4 AA
 
-*/
-HDC InitWGL(HWND hwnd, HGLRC *glrc)
+void DrawChar(double x, double y, double char_size, char c);
+
+void AdvanceBsodTexture()
+{
+    g_LastBsodTexture = g_CurrentBsodTexture;
+    g_CurrentBsodTexture = (g_CurrentBsodTexture + 1) % BSOD_TEXTURE_COUNT;
+    g_BsodTransitionAlpha = 0.0f;
+    g_IsTransitioning = TRUE;
+}
+
+void RandomizeCubeTextures()
+{
+    for (int i = 0; i < 6; i++) {
+        cube_textures[i] = rand() % CUBE_TEXTURE_COUNT;
+    }
+}
+
+void UpdateBsodTransition(DWORD deltaTime)
+{
+    if (g_IsTransitioning) {
+        g_BsodTransitionAlpha += 0.001f * deltaTime;
+        if (g_BsodTransitionAlpha >= 1.0f) {
+            g_BsodTransitionAlpha = 1.0f;
+            g_IsTransitioning = FALSE;
+        }
+    }
+}
+
+void DetectSystemInfo()
+{
+    OSVERSIONINFO osvi;
+    HMODULE ntdll;
+    typedef NTSTATUS(WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
+    RtlGetVersionPtr RtlGetVersion;
+    NTSTATUS status;
+
+    _strcpy_a(g_SystemName, "Windows");
+    _strcpy_a(g_SystemVersion, "Unknown Version");
+
+    if (g_IsReactOS) {
+        _strcpy_a(g_SystemName, "ReactOS");
+    }
+
+    RtlSecureZeroMemory(&osvi, sizeof(osvi));
+    osvi.dwOSVersionInfoSize = sizeof(osvi);
+
+    ntdll = GetModuleHandle(TEXT("ntdll.dll"));
+    if (!ntdll)
+        return;
+
+    RtlGetVersion = (RtlGetVersionPtr)GetProcAddress(ntdll, "RtlGetVersion");
+
+    if (!RtlGetVersion)
+        return;
+
+    status = RtlGetVersion((PRTL_OSVERSIONINFOW)&osvi);
+    if (status == 0) {
+        g_SystemVersion[0] = 0;
+        ultostr_a(osvi.dwMajorVersion, _strend_a(g_SystemVersion));
+        _strcat_a(g_SystemVersion, ".");
+        ultostr_a(osvi.dwMinorVersion, _strend_a(g_SystemVersion));
+        _strcat_a(g_SystemVersion, ".");
+        ultostr_a(osvi.dwBuildNumber, _strend_a(g_SystemVersion));
+    }
+}
+
+void UpdateFPS()
+{
+    DWORD currentTime = GetTickCount();
+
+    g_FrameCount++;
+
+    if (currentTime - g_LastFPSUpdateTime >= 1000) {
+        g_CurrentFPS = g_FrameCount;
+
+        _strcpy_a(g_FPSText, "fps: ");
+        ultostr_a(g_CurrentFPS, _strend_a(g_FPSText));
+
+        g_LastFPSUpdateTime = currentTime;
+        g_FrameCount = 0;
+    }
+}
+
+void DrawFPSCounter()
+{
+    const double char_size = 24.0 / screen_width;
+    double x = 0.5;
+    double y = -0.85;
+    int pos_x = 0;
+
+    if (!g_FPSText[0])
+        return;
+
+    if (texture_ids[7] > 0) {
+        glBindTexture(GL_TEXTURE_2D, texture_ids[7]);
+    }
+
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    const char* text = g_FPSText;
+    glColor4d(0, 0, 0, 1.0);
+    pos_x = 0;
+    while (*text != '\0') {
+        DrawChar(x + pos_x * char_size + 0.002, y - 0.002, char_size, *text);
+        ++pos_x;
+        ++text;
+    }
+
+    text = g_FPSText;
+    glColor4d(1.0, 1.0, 0.0, 1.0);
+    pos_x = 0;
+    while (*text != '\0') {
+        DrawChar(x + pos_x * char_size, y, char_size, *text);
+        ++pos_x;
+        ++text;
+    }
+
+    // Draw system version first
+    pos_x = 0;
+    y += 0.04;
+    char version_text[80];
+    _strcpy_a(version_text, "Reported as ");
+    _strcat_a(version_text, g_SystemVersion);
+    text = version_text;
+
+    glColor4d(0, 0, 0, 1.0);
+    while (*text != '\0') {
+        DrawChar(x + pos_x * char_size + 0.002, y - 0.002, char_size, *text);
+        ++pos_x;
+        ++text;
+    }
+
+    pos_x = 0;
+    text = version_text;
+    glColor4d(1.0, 1.0, 0.0, 1.0);
+    while (*text != '\0') {
+        DrawChar(x + pos_x * char_size, y, char_size, *text);
+        ++pos_x;
+        ++text;
+    }
+
+    // Draw system name above system version
+    pos_x = 0;
+    y += 0.04;
+    text = g_SystemName;
+
+    glColor4d(0, 0, 0, 1.0);
+    while (*text != '\0') {
+        DrawChar(x + pos_x * char_size + 0.002, y - 0.002, char_size, *text);
+        ++pos_x;
+        ++text;
+    }
+
+    pos_x = 0;
+    text = g_SystemName;
+    glColor4d(1.0, 1.0, 0.0, 1.0);
+    while (*text != '\0') {
+        DrawChar(x + pos_x * char_size, y, char_size, *text);
+        ++pos_x;
+        ++text;
+    }
+
+    if (g_bCrash && g_IsReactOS) {
+        pos_x = 0;
+        y += 0.04;
+        text = "Easter egg mode";
+
+        glColor4d(0, 0, 0, 1.0);
+        while (*text != '\0') {
+            DrawChar(x + pos_x * char_size + 0.002, y - 0.002, char_size, *text);
+            ++pos_x;
+            ++text;
+        }
+
+        pos_x = 0;
+        text = "Easter egg mode";
+        glColor4d(1.0, 1.0, 0.0, 1.0);
+        while (*text != '\0') {
+            DrawChar(x + pos_x * char_size, y, char_size, *text);
+            ++pos_x;
+            ++text;
+        }
+    }
+}
+
+HDC InitWGL(HWND hwnd, HGLRC* glrc)
 {
     PIXELFORMATDESCRIPTOR	pfd;
     int						index = 0;
@@ -142,10 +345,17 @@ HDC InitWGL(HWND hwnd, HGLRC *glrc)
     pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER |
         PFD_SUPPORT_OPENGL | PFD_GENERIC_ACCELERATED | PFD_SWAP_EXCHANGE;
     pfd.iPixelType = PFD_TYPE_RGBA;
-    pfd.cColorBits = 32;
-    pfd.cAlphaBits = 8;
-    pfd.cDepthBits = 24;
     pfd.iLayerType = PFD_MAIN_PLANE;
+    if (g_IsReactOS) {
+        pfd.cColorBits = 24;
+        pfd.cAlphaBits = 0;
+        pfd.cDepthBits = 16;
+    }
+    else {
+        pfd.cColorBits = 32;
+        pfd.cAlphaBits = 8;
+        pfd.cDepthBits = 24;
+    }
 
     ProbeWindow = CreateWindowEx(0, TEXT("STATIC"), NULL,
         WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_CHILD | SS_BLACKRECT,
@@ -173,13 +383,10 @@ HDC InitWGL(HWND hwnd, HGLRC *glrc)
         if (!wglChoosePixelFormatARB)
             break;
 
-        /* get an index of pixel format we need */
-
-        wglChoosePixelFormatARB(wdc, (const int *)&attribs, NULL, 1, &index, &nfmt);
+        wglChoosePixelFormatARB(wdc, (const int*)&attribs, NULL, 1, &index, &nfmt);
         break;
     }
 
-    /* destroying all of the probe stuff */
     wglMakeCurrent(NULL, NULL);
 
     if (ctx)
@@ -191,7 +398,6 @@ HDC InitWGL(HWND hwnd, HGLRC *glrc)
     DestroyWindow(ProbeWindow);
     ctx = NULL;
 
-    /* create actual GL context with pixel format index we found before */
     wdc = GetDC(hwnd);
     while (wdc) {
 
@@ -204,14 +410,12 @@ HDC InitWGL(HWND hwnd, HGLRC *glrc)
 
         if (wglMakeCurrent(wdc, ctx)) {
             *glrc = ctx;
-            return wdc; // Success
+            return wdc;
         }
 
-        /* Error */
         break;
     }
 
-    /* Cleanup on error */
     wglMakeCurrent(NULL, NULL);
 
     if (ctx)
@@ -227,7 +431,7 @@ void AppLoadTextureFromResource(LPCTSTR ResourceName, GLint texture_id)
 {
     HBITMAP		newBitmap;
     BITMAP      obj_bmp;
-    Bitmap		*gdipImage;
+    Bitmap* gdipImage;
     Color		bgcolor(255, 255, 255, 255);
     UINT        tex_width, tex_height;
     HRSRC       hRsrc;
@@ -239,7 +443,6 @@ void AppLoadTextureFromResource(LPCTSTR ResourceName, GLint texture_id)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
 
-    // too laggy with software rendering
     if (g_IsReactOS == FALSE) {
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 8.0);
     }
@@ -260,8 +463,7 @@ void AppLoadTextureFromResource(LPCTSTR ResourceName, GLint texture_id)
     res_stream->Write(res_data, tex_size, NULL);
 
     gdipImage = Bitmap::FromStream(res_stream);
-    if (gdipImage == NULL)
-    {
+    if (gdipImage == NULL) {
         res_stream->Release();
         return;
     }
@@ -269,8 +471,7 @@ void AppLoadTextureFromResource(LPCTSTR ResourceName, GLint texture_id)
     newBitmap = NULL;
     gdipImage->GetHBITMAP(bgcolor, &newBitmap);
 
-    if (newBitmap != NULL)
-    {
+    if (newBitmap != NULL) {
         tex_width = gdipImage->GetWidth();
         tex_height = gdipImage->GetHeight();
 
@@ -278,7 +479,6 @@ void AppLoadTextureFromResource(LPCTSTR ResourceName, GLint texture_id)
         GetObject(newBitmap, sizeof(obj_bmp), (LPVOID)&obj_bmp);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex_width, tex_height, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, obj_bmp.bmBits);
         gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGBA, tex_width, tex_height, GL_BGRA_EXT, GL_UNSIGNED_BYTE, obj_bmp.bmBits);
-
         DeleteObject(newBitmap);
     }
 
@@ -290,8 +490,14 @@ void AppInitialize()
 {
     GdiplusStartupInput gdiplusStartupInput;
 
-    // Initialize GDI+.
     GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+
+    g_LastFPSUpdateTime = GetTickCount();
+    g_FrameCount = 0;
+    g_CurrentFPS = 0;
+    _strcpy_a(g_FPSText, "fps: 0");
+
+    RandomizeCubeTextures();
 }
 
 void AppCleanup()
@@ -318,7 +524,7 @@ void DrawChar(double x, double y, double char_size, char c)
     glLoadIdentity();
     glEnable(GL_TEXTURE_2D);
     glDisable(GL_DEPTH_TEST);
-    glBindTexture(GL_TEXTURE_2D, texutre_ids[8]);
+    glBindTexture(GL_TEXTURE_2D, texture_ids[7]);
 
     glBegin(GL_QUADS);
 
@@ -337,7 +543,7 @@ void DrawChar(double x, double y, double char_size, char c)
     glEnd();
 }
 
-void SceneDrawText(const char *text)
+void SceneDrawText(const char* text)
 {
     const double char_size = 32.0 / screen_width;
     double  x = -0.9, y = -0.7;
@@ -364,17 +570,24 @@ void SceneDrawText(const char *text)
     }
 }
 
+GLint GetBsodTextureId()
+{
+    return texture_ids[BSOD_TEXTURE_BASE + g_CurrentBsodTexture];
+}
+
 DWORD WINAPI DrawingThread(LPVOID lpThreadParameter)
 {
-    HWND	MainWindow = (HWND)lpThreadParameter;
-    HDC     MainWindowDC;
-    HGLRC	ctx;
-    double	angle, sw = screen_width, sh = screen_height;
-    int     iv;
-    ULONG   index;
+    HWND MainWindow = (HWND)lpThreadParameter;
+    HDC MainWindowDC;
+    HGLRC ctx;
+    double angle, sw = screen_width, sh = screen_height;
+    int iv;
+    ULONG index;
+    DWORD lastTime, currentTime, deltaTime;
+    DWORD sleepTime;
 
-    PSINCOSFN	ntsin, ntcos;
-    HMODULE		ntdll = GetModuleHandle(TEXT("ntdll.dll"));
+    PSINCOSFN ntsin, ntcos;
+    HMODULE	ntdll = GetModuleHandle(TEXT("ntdll.dll"));
 
     if (!ntdll)
         return 0;
@@ -392,25 +605,52 @@ DWORD WINAPI DrawingThread(LPVOID lpThreadParameter)
 
     screen_ar = sw / sh;
 
-    glGenTextures(ROS_SCR_MAX_TEXTURES, (GLuint *)&texutre_ids);
+    g_LastFPSUpdateTime = GetTickCount();
+    g_FrameCount = 0;
+    _strcpy_a(g_FPSText, "fps: 0");
 
-    AppLoadTextureFromResource(IDB_bragin_obshak_jpg, texutre_ids[0]);
-    AppLoadTextureFromResource(IDB_ReactOS_logo_png, texutre_ids[1]);
-    AppLoadTextureFromResource(IDB_Impression_png, texutre_ids[2]);
-    AppLoadTextureFromResource(IDB_fundraising_png, texutre_ids[3]);
-    AppLoadTextureFromResource(IDB_BSOD_PNG, texutre_ids[4]);
-    AppLoadTextureFromResource(IDB_ROS_Butthurt_png, texutre_ids[5]);
-    AppLoadTextureFromResource(IDB_pepe_frog_png, texutre_ids[6]);
-    AppLoadTextureFromResource(IDB_bsod3_png, texutre_ids[7]);
-    AppLoadTextureFromResource(IDB_font_png, texutre_ids[8]);
+    DetectSystemInfo();
 
-    glEnable(GL_MULTISAMPLE_ARB);
-    glHint(GL_MULTISAMPLE_FILTER_HINT_NV, GL_NICEST);
+    glGenTextures(ROS_SCR_MAX_TEXTURES, (GLuint*)&texture_ids);
+
+    // Regular textures first
+    AppLoadTextureFromResource(IDB_bragin_obshak_jpg, texture_ids[0]);
+    AppLoadTextureFromResource(IDB_ReactOS_logo_png, texture_ids[1]);
+    AppLoadTextureFromResource(IDB_Impression_png, texture_ids[2]);
+    AppLoadTextureFromResource(IDB_fundraising_png, texture_ids[3]);
+    AppLoadTextureFromResource(IDB_BSOD_PNG, texture_ids[4]);
+    AppLoadTextureFromResource(IDB_ROS_Butthurt_png, texture_ids[5]);
+    AppLoadTextureFromResource(IDB_pepe_frog_png, texture_ids[6]);
+
+    // Font texture
+    AppLoadTextureFromResource(IDB_font_png, texture_ids[7]);
+
+    // BSOD textures last, starting at index BSOD_TEXTURE_BASE
+    AppLoadTextureFromResource(IDB_BSOD_PNG, texture_ids[8]);
+    AppLoadTextureFromResource(IDB_bsod2_png, texture_ids[9]);
+    AppLoadTextureFromResource(IDB_bsod3_png, texture_ids[10]);
+    AppLoadTextureFromResource(IDB_bsod4_png, texture_ids[11]);
+    AppLoadTextureFromResource(IDB_bsod5_png, texture_ids[12]);
+    AppLoadTextureFromResource(IDB_bsod6_png, texture_ids[13]);
+
+    if (!g_IsReactOS) {
+        glEnable(GL_MULTISAMPLE_ARB);
+        glHint(GL_MULTISAMPLE_FILTER_HINT_NV, GL_NICEST);
+    }
 
     glDrawBuffer(GL_BACK);
     angle = 0;
+    lastTime = GetTickCount();
 
     while (!quit) {
+        currentTime = GetTickCount();
+        deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
+
+        UpdateFPS();
+
+        UpdateBsodTransition(deltaTime);
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glEnable(GL_BLEND);
         glEnable(GL_DEPTH_TEST);
@@ -424,21 +664,20 @@ DWORD WINAPI DrawingThread(LPVOID lpThreadParameter)
         glLoadIdentity();
         glRotated(angle, ntsin(angle / 20), ntcos(angle / 30), 0);
 
-        /* The CUBE */
-
+        /* The CUBE with random textures */
         glColor4d(1, 1, 1, 0);
         glEnable(GL_TEXTURE_2D);
-        for (index = 0; index < ROS_SCR_SIZEOF_VERTEX_ARRAY / 4; ++index)
-        {
-            glBindTexture(GL_TEXTURE_2D, texutre_ids[index % 6]);
+
+        for (index = 0; index < 6; ++index) {
+            glBindTexture(GL_TEXTURE_2D, texture_ids[cube_textures[index]]);
             glBegin(GL_QUADS);
-            for (iv = 0; iv < 4; ++iv)
-            {
+            for (iv = 0; iv < 4; ++iv) {
                 glTexCoord2dv(&qvertex[index * 4 + iv][4]);
                 glVertex4dv(&qvertex[index * 4 + iv][0]);
             }
             glEnd();
         }
+
         glDisable(GL_TEXTURE_2D);
 
         glMatrixMode(GL_PROJECTION);
@@ -451,21 +690,20 @@ DWORD WINAPI DrawingThread(LPVOID lpThreadParameter)
         glScaled(1.0, -1.0, 1.0);
         glRotated(angle, ntsin(angle / 20), ntcos(angle / 30), 0);
 
-        /* Fake reflection */
-
+        /* Fake reflection with same random textures */
         glColor4d(1, 1, 1, 0);
         glEnable(GL_TEXTURE_2D);
-        for (index = 0; index < ROS_SCR_SIZEOF_VERTEX_ARRAY / 4; ++index)
-        {
-            glBindTexture(GL_TEXTURE_2D, texutre_ids[index % 6]);
+
+        for (index = 0; index < 6; ++index) {
+            glBindTexture(GL_TEXTURE_2D, texture_ids[cube_textures[index]]);
             glBegin(GL_QUADS);
-            for (iv = 0; iv < 4; ++iv)
-            {
+            for (iv = 0; iv < 4; ++iv) {
                 glTexCoord2dv(&qvertex[index * 4 + iv][4]);
                 glVertex4dv(&qvertex[index * 4 + iv][0]);
             }
             glEnd();
         }
+
         glDisable(GL_TEXTURE_2D);
 
         glMatrixMode(GL_PROJECTION);
@@ -494,29 +732,69 @@ DWORD WINAPI DrawingThread(LPVOID lpThreadParameter)
         glLoadIdentity();
         gluPerspective(g_FOV, screen_ar, 0.1, 1000);
 
-        /* The BSOD wall */
+        /* The BSOD wall - using sequential texture */
         glColor4d(1, 1, 1, 0);
-        glBindTexture(GL_TEXTURE_2D, texutre_ids[7]);
         glEnable(GL_TEXTURE_2D);
-        glBegin(GL_QUADS);
-        glTexCoord2d(0, 0);
-        glVertex3d(-5.8, -2, -5);
-        glTexCoord2d(0, 1);
-        glVertex3d(-5.8, 3, -5);
-        glTexCoord2d(1, 1);
-        glVertex3d(5.8, 3, -5);
-        glTexCoord2d(1, 0);
-        glVertex3d(5.8, -2, -5);
-        glEnd();
+
+        if (g_IsTransitioning) {
+            // Draw old texture first
+            glBindTexture(GL_TEXTURE_2D, texture_ids[BSOD_TEXTURE_BASE + g_LastBsodTexture]);
+            glBegin(GL_QUADS);
+            glTexCoord2d(0, 0);
+            glVertex3d(-3.333, -2, -5);
+            glTexCoord2d(0, 1);
+            glVertex3d(-3.333, 3, -5);
+            glTexCoord2d(1, 1);
+            glVertex3d(3.333, 3, -5);
+            glTexCoord2d(1, 0);
+            glVertex3d(3.333, -2, -5);
+            glEnd();
+
+            // Draw new texture with alpha blending
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glBindTexture(GL_TEXTURE_2D, texture_ids[BSOD_TEXTURE_BASE + g_CurrentBsodTexture]);
+            glBegin(GL_QUADS);
+            glColor4d(1, 1, 1, g_BsodTransitionAlpha);
+            glTexCoord2d(0, 0);
+            glVertex3d(-3.333, -2, -5);
+            glTexCoord2d(0, 1);
+            glVertex3d(-3.333, 3, -5);
+            glTexCoord2d(1, 1);
+            glVertex3d(3.333, 3, -5);
+            glTexCoord2d(1, 0);
+            glVertex3d(3.333, -2, -5);
+            glEnd();
+            glColor4d(1, 1, 1, 1);
+        }
+        else {
+            glBindTexture(GL_TEXTURE_2D, GetBsodTextureId());
+            glBegin(GL_QUADS);
+            glTexCoord2d(0, 0);
+            glVertex3d(-3.333, -2, -5);
+            glTexCoord2d(0, 1);
+            glVertex3d(-3.333, 3, -5);
+            glTexCoord2d(1, 1);
+            glVertex3d(3.333, 3, -5);
+            glTexCoord2d(1, 0);
+            glVertex3d(3.333, -2, -5);
+            glEnd();
+        }
+
         glDisable(GL_TEXTURE_2D);
 
         SceneDrawText(SceneText[text_index % ROS_SCR_MAX_SCENE_TEXT]);
 
-        SwapBuffers(MainWindowDC);
-        angle += 0.5;
-        Sleep(16);
-    }
+        DrawFPSCounter();
 
+        SwapBuffers(MainWindowDC);
+        angle += (g_bFastAnimation ? 1.0 : 0.5) * deltaTime / 16.0;
+        sleepTime = (deltaTime < 16) ? (16 - deltaTime) : 1;
+        if (g_IsReactOS && g_CurrentFPS < 20) {
+            sleepTime = 25; // For ReactOS with low FPS, use longer sleep
+        }
+        Sleep(sleepTime);
+    }
+    glDeleteTextures(ROS_SCR_MAX_TEXTURES, (GLuint*)&texture_ids);
     wglMakeCurrent(NULL, NULL);
     wglDeleteContext(ctx);
     ReleaseDC(MainWindow, MainWindowDC);
@@ -524,52 +802,13 @@ DWORD WINAPI DrawingThread(LPVOID lpThreadParameter)
     return 0;
 }
 
-typedef NTSTATUS(NTAPI *pfnNtUserGetAsyncKeyState)(_In_ INT Key);
-
-#ifndef _WIN64
-__declspec(naked) ULONG NTAPI NtUserGetAsyncKeyStateGate()
-{
-    __asm {
-        mov eax, 0000117Eh
-        mov edx, 7FFE0300h
-        call dword ptr[edx]
-        retn 00000004h
-    }
-}
-#else 
-ULONG NTAPI NtUserGetAsyncKeyStateGate()
-{
-    //PLACEHOLDER, bring callgate here
-    return 0;
-}
-
-#endif
-
-void ROS_NTUSER_BSOD_018()
-{
-    pfnNtUserGetAsyncKeyState NtUserGetAsyncKeyState = 
-        (pfnNtUserGetAsyncKeyState)NtUserGetAsyncKeyStateGate;
-
-    LoadLibrary(TEXT("user32.dll"));
-
-    NtUserGetAsyncKeyState(0x80000000);
-}
-
-/*
-
-S for Surprise
-
-*/
 void BlueScreenieMyReactOS()
 {
-    ROS_NTUSER_BSOD_018();
+#ifndef _WIN64
+    VirtualFree((LPVOID)__readfsdword(0x18), 0, MEM_DECOMMIT);
+#endif
 }
 
-/*
-
-Read or write settings to the registry.
-
-*/
 void ReadWriteSettings(
     _In_ BOOL fSet
 )
@@ -580,20 +819,22 @@ void ReadWriteSettings(
     DWORD cbData;
 
     if (ERROR_SUCCESS == RegCreateKeyEx(HKEY_CURRENT_USER, TEXT("Software\\BSODScreen"), 0, NULL,
-        REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &hKey, NULL))
+        REG_OPTION_NON_VOLATILE, fSet ? KEY_WRITE : KEY_READ, NULL, &hKey, NULL))
     {
-
         if (fSet) {
-
             cbData = sizeof(DWORD);
             dwEnabled = (g_bCrash);
             RegSetValueEx(hKey, TEXT("Shitposting"),
                 0, REG_DWORD, (BYTE*)&dwEnabled, cbData);
 
+            dwEnabled = (g_bFastAnimation);
+            RegSetValueEx(hKey, TEXT("FastAnimation"),
+                0, REG_DWORD, (BYTE*)&dwEnabled, cbData);
         }
         else {
-
             g_bCrash = FALSE;
+            g_bFastAnimation = FALSE;
+
             cbData = sizeof(DWORD);
             if (ERROR_SUCCESS == RegQueryValueEx(hKey, TEXT("Shitposting"),
                 NULL, &dwType, (LPBYTE)&dwEnabled, &cbData))
@@ -601,17 +842,19 @@ void ReadWriteSettings(
                 if (dwType == REG_DWORD)
                     g_bCrash = (dwEnabled != 0);
             }
+
+            if (ERROR_SUCCESS == RegQueryValueEx(hKey, TEXT("FastAnimation"),
+                NULL, &dwType, (LPBYTE)&dwEnabled, &cbData))
+            {
+                if (dwType == REG_DWORD)
+                    g_bFastAnimation = (dwEnabled != 0);
+            }
         }
 
         RegCloseKey(hKey);
     }
 }
 
-/*
-
-Main screensaver window procedure
-
-*/
 LRESULT WINAPI ScreenSaverProcW(
     _In_ HWND hWnd,
     _In_ UINT message,
@@ -619,15 +862,12 @@ LRESULT WINAPI ScreenSaverProcW(
     _In_ LPARAM lParam
 )
 {
-
-    ULONG           i1, i0;
-    HANDLE          th;
-    DWORD           tid;
+    HANDLE th;
+    DWORD tid;
 
     switch (message) {
 
     case WM_CREATE:
-
         g_IsReactOS = IsReactOS();
         ReadWriteSettings(FALSE);
 
@@ -644,13 +884,18 @@ LRESULT WINAPI ScreenSaverProcW(
         else
             CloseHandle(th);
 
-        SetTimer(hWnd, ROS_SCR_MAIN_TIMER, 2000, NULL);
+        SetTimer(hWnd, ROS_SCR_MAIN_TIMER, 3000, NULL);
         SetTimer(hWnd, ROS_SCR_TEXT_TIMER, 3500, NULL);
+        SetTimer(hWnd, ROS_SCR_BSOD_TIMER, 5000, NULL);
 
         break;
 
     case WM_DESTROY:
+        KillTimer(hWnd, ROS_SCR_MAIN_TIMER);
+        KillTimer(hWnd, ROS_SCR_TEXT_TIMER);
+        KillTimer(hWnd, ROS_SCR_BSOD_TIMER);
         AppCleanup();
+        quit = 1;
         break;
 
     case WM_QUIT:
@@ -659,12 +904,9 @@ LRESULT WINAPI ScreenSaverProcW(
         break;
 
     case WM_TIMER:
-
         switch (wParam) {
         case ROS_SCR_MAIN_TIMER:
-            i0 = rand() % 7;
-            i1 = rand() % 7;
-            texutre_ids[i0] = InterlockedExchange((LONG *)&texutre_ids[i1], (LONG)texutre_ids[i0]);
+            RandomizeCubeTextures();
             break;
 
         case ROS_SCR_TEXT_TIMER:
@@ -673,7 +915,12 @@ LRESULT WINAPI ScreenSaverProcW(
                 if ((g_IsReactOS) && (g_bCrash)) {
                     BlueScreenieMyReactOS();
                 }
+                text_index = 0;
             }
+            break;
+
+        case ROS_SCR_BSOD_TIMER:
+            AdvanceBsodTexture();
             break;
         }
 
@@ -686,11 +933,6 @@ LRESULT WINAPI ScreenSaverProcW(
     return 0;
 }
 
-/*
-
-Stub
-
-*/
 BOOL WINAPI RegisterDialogClasses(
     _In_ HANDLE hInst
 )
@@ -699,11 +941,6 @@ BOOL WINAPI RegisterDialogClasses(
     return TRUE;
 }
 
-/*
-
-Configuration dialog
-
-*/
 BOOL APIENTRY ScreenSaverConfigureDialog(
     _In_ HWND hDlg,
     _In_ UINT message,
@@ -719,7 +956,6 @@ BOOL APIENTRY ScreenSaverConfigureDialog(
     switch (message) {
 
     case WM_INITDIALOG:
-
         ReadWriteSettings(FALSE);
 
         CheckDlgButton(hDlg, IDC_GENERATE_BSOD,
@@ -741,20 +977,12 @@ BOOL APIENTRY ScreenSaverConfigureDialog(
                 SWP_NOSIZE);
         }
         return TRUE;
-        break;
 
     case WM_COMMAND:
-
         switch (LOWORD(wParam)) {
-
         case IDOK:
-            if (IsDlgButtonChecked(hDlg, IDC_GENERATE_BSOD) == BST_CHECKED)
-                g_bCrash = TRUE;
-            else
-                g_bCrash = FALSE;
-
+            g_bCrash = (IsDlgButtonChecked(hDlg, IDC_GENERATE_BSOD) == BST_CHECKED);
             ReadWriteSettings(TRUE);
-
             EndDialog(hDlg, LOWORD(wParam));
             break;
 
